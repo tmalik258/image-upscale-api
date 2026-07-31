@@ -14,6 +14,17 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
+`requirements.txt` installs the CPU-only build of `torch`. To run inference on
+an NVIDIA GPU, install the matching CUDA build afterward, e.g. for CUDA 12.4:
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+```
+
+Check your driver's supported CUDA version and pick a matching wheel from
+<https://download.pytorch.org/whl/torch/>. The API automatically uses the GPU
+when `torch.cuda.is_available()` returns `True` — no code changes needed.
+
 Copy `.env.example` to `.env`. Set `PUBLIC_BASE_URL` to an address that both
 n8n and its users can reach. A localhost URL only works when n8n runs on the
 same machine or network.
