@@ -1,40 +1,45 @@
 # Image Upscaling API
 
-Asynchronous 4x image upscaling with Real-ESRGAN. The API accepts an image,
+Asynchronous image upscaling with Real-ESRGAN or HAT. The API accepts an image,
 processes one job at a time, and sends the result URL and metadata to an n8n
-webhook.
+webhook. Scale is taken from the loaded model (`model.scale`); both bundled
+weights are 4x.
 
 ## Setup
 
-Create a Python virtual environment and install the pinned dependencies:
+Install uv, then sync the pinned dependencies. Pass exactly one PyTorch extra so
+CPU-only machines do not download CUDA wheels:
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
-python -m pip install -r requirements.txt
+uv sync --extra cpu
 ```
 
-`requirements.txt` installs the CPU-only build of `torch`. To run inference on
-an NVIDIA GPU, install the matching CUDA build afterward, e.g. for CUDA 12.4:
+With an NVIDIA GPU, use the CUDA extra instead:
 
 ```bash
-python -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+uv sync --extra cuda
 ```
 
-Check your driver's supported CUDA version and pick a matching wheel from
-<https://download.pytorch.org/whl/torch/>. The API automatically uses the GPU
-when `torch.cuda.is_available()` returns `True` — no code changes needed.
+`cpu` installs CPU-only `torch`. `cuda` installs the CUDA 12.6 build from
+PyTorch's index. The extras conflict, so `uv sync` never installs both. The API
+uses the GPU when `torch.cuda.is_available()` returns `True` — no code changes
+needed.
 
 Copy `.env.example` to `.env`. Set `PUBLIC_BASE_URL` to an address that both
 n8n and its users can reach. A localhost URL only works when n8n runs on the
 same machine or network.
 
-The default model file is `weights/RealESRGAN_x4plus.pth`.
+Place Real-ESRGAN weights at `weights/RealESRGAN_x4plus.pth`. Download HAT
+weights into `weights/Real_HAT_GAN_SRx4.pth` with:
+
+```bash
+uv run --no-sync python scripts/download_weights.py
+```
 
 ## Run
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 Interactive API documentation is available at `http://localhost:8000/docs`.
@@ -50,7 +55,8 @@ of `image` or `image_url`.
 curl -X POST http://localhost:8000/api/v1/upscale/jobs \
   -F "image=@4xl.png" \
   -F "callback_url=https://example.app/webhook/upscale-complete" \
-  -F "tile=400"
+  -F "tile=400" \
+  -F "model_type=esrgan"
 ```
 
 ### Download an image from a URL
@@ -59,7 +65,8 @@ curl -X POST http://localhost:8000/api/v1/upscale/jobs \
 curl -X POST http://localhost:8000/api/v1/upscale/jobs \
   -F "image_url=https://images.example.com/source.png" \
   -F "callback_url=https://example.app/webhook/upscale-complete" \
-  -F "tile=400"
+  -F "tile=400" \
+  -F "model_type=hat"
 ```
 
 The remote URL must use HTTP or HTTPS, resolve to a public address, and return
@@ -68,6 +75,8 @@ file uploads and the `IMAGE_DOWNLOAD_TIMEOUT_SECONDS` timeout.
 
 Optional crop fields are `crop_left`, `crop_top`, `crop_right`, and
 `crop_bottom`. All four are required when cropping.
+
+`model_type` is `esrgan` (default) or `hat`.
 
 The API immediately returns `202 Accepted`:
 
@@ -92,7 +101,8 @@ When processing completes, the API sends JSON to `callback_url`:
   "output_height": 2048,
   "duration_seconds": 12.4,
   "completed_at": "2026-07-29T12:00:00Z",
-  "error": null
+  "error": null,
+  "model_type": "esrgan"
 }
 ```
 
@@ -110,5 +120,5 @@ Callbacks are retried according to `CALLBACK_ATTEMPTS`.
 ## Test
 
 ```bash
-pytest
+uv run --no-sync pytest
 ```

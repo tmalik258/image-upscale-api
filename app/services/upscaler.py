@@ -4,12 +4,13 @@ from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image
+from spandrel import ImageModelDescriptor
 
-from app.models.esrgan import RRDBNet, load_esrgan_model
+from app.api_schema.jobs import UpscaleModelType
+from app.models.loader import WEIGHT_FILES, load_image_model
 
 
 Image.MAX_IMAGE_PIXELS = None
-UPSCALE_FACTOR = 4
 OUTPUT_DPI = 144
 
 
@@ -22,9 +23,12 @@ class UpscaleResult:
 
 
 class ImageUpscaler:
-    def __init__(self, weights_path: Path, blocks: int = 23) -> None:
+    def __init__(self, weights_dir: Path) -> None:
+        if not weights_dir.is_dir():
+            raise FileNotFoundError(f"Weights directory not found: {weights_dir}")
+        self.weights_dir = weights_dir
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model: RRDBNet = load_esrgan_model(weights_path, self.device, blocks)
+        self._models: dict[str, ImageModelDescriptor] = {}
 
     def process(
         self,
@@ -32,7 +36,9 @@ class ImageUpscaler:
         output_path: Path,
         tile: int,
         crop: tuple[int, int, int, int] | None = None,
+        model_type: UpscaleModelType = UpscaleModelType.ESRGAN,
     ) -> UpscaleResult:
+        model = self._model(model_type)
         with Image.open(input_path) as source:
             image = source.convert("RGB")
 
@@ -41,7 +47,7 @@ class ImageUpscaler:
             image = image.crop(crop)
 
         input_width, input_height = image.size
-        output = self._upscale(image, tile)
+        output = self._upscale(model, image, tile)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output.save(output_path, format="PNG", dpi=(OUTPUT_DPI, OUTPUT_DPI))
         output_width, output_height = output.size
@@ -52,7 +58,20 @@ class ImageUpscaler:
             output_height=output_height,
         )
 
-    def _upscale(self, image: Image.Image, tile: int, pad: int = 10) -> Image.Image:
+    def _model(self, model_type: UpscaleModelType) -> ImageModelDescriptor:
+        key = model_type.value
+        if key not in self._models:
+            weights_path = self.weights_dir / WEIGHT_FILES[model_type]
+            self._models[key] = load_image_model(weights_path, self.device)
+        return self._models[key]
+
+    def _upscale(
+        self,
+        model: ImageModelDescriptor,
+        image: Image.Image,
+        tile: int,
+        pad: int = 10,
+    ) -> Image.Image:
         image_array = np.asarray(image, dtype=np.float32) / 255.0
         tensor = (
             torch.from_numpy(image_array)
@@ -63,9 +82,9 @@ class ImageUpscaler:
         _, _, height, width = tensor.shape
 
         if tile <= 0:
-            output = self._infer(tensor)
+            output = self._infer(model, tensor)
         else:
-            output = self._upscale_tiled(tensor, width, height, tile, pad)
+            output = self._upscale_tiled(model, tensor, width, height, tile, pad)
 
         output_array = (
             output.squeeze(0).clamp(0, 1).permute(1, 2, 0).cpu().numpy()
@@ -74,17 +93,19 @@ class ImageUpscaler:
 
     def _upscale_tiled(
         self,
+        model: ImageModelDescriptor,
         tensor: torch.Tensor,
         width: int,
         height: int,
         tile: int,
         pad: int,
     ) -> torch.Tensor:
+        scale = model.scale
         output = torch.zeros(
             1,
             3,
-            height * UPSCALE_FACTOR,
-            width * UPSCALE_FACTOR,
+            height * scale,
+            width * scale,
             device=self.device,
         )
         horizontal_tiles = -(-width // tile)
@@ -101,25 +122,31 @@ class ImageUpscaler:
                 padded_x_end = min(x_end + pad, width)
                 padded_y_end = min(y_end + pad, height)
                 patch = self._infer(
+                    model,
                     tensor[
                         :,
                         :,
                         padded_y_start:padded_y_end,
                         padded_x_start:padded_x_end,
-                    ]
+                    ],
                 )
                 self._copy_patch(
                     output,
                     patch,
                     (x_start, y_start, x_end, y_end),
                     (padded_x_start, padded_y_start),
+                    scale,
                 )
 
         return output
 
-    def _infer(self, tensor: torch.Tensor) -> torch.Tensor:
+    def _infer(
+        self,
+        model: ImageModelDescriptor,
+        tensor: torch.Tensor,
+    ) -> torch.Tensor:
         with torch.inference_mode():
-            return self.model(tensor)
+            return model(tensor)
 
     @staticmethod
     def _copy_patch(
@@ -127,16 +154,22 @@ class ImageUpscaler:
         patch: torch.Tensor,
         bounds: tuple[int, int, int, int],
         padded_start: tuple[int, int],
+        scale: int,
     ) -> None:
         x_start, y_start, x_end, y_end = bounds
         padded_x_start, padded_y_start = padded_start
-        offset_x = (x_start - padded_x_start) * UPSCALE_FACTOR
-        offset_y = (y_start - padded_y_start) * UPSCALE_FACTOR
-        output[:, :, y_start * 4 : y_end * 4, x_start * 4 : x_end * 4] = patch[
+        offset_x = (x_start - padded_x_start) * scale
+        offset_y = (y_start - padded_y_start) * scale
+        output[
             :,
             :,
-            offset_y : offset_y + (y_end - y_start) * UPSCALE_FACTOR,
-            offset_x : offset_x + (x_end - x_start) * UPSCALE_FACTOR,
+            y_start * scale : y_end * scale,
+            x_start * scale : x_end * scale,
+        ] = patch[
+            :,
+            :,
+            offset_y : offset_y + (y_end - y_start) * scale,
+            offset_x : offset_x + (x_end - x_start) * scale,
         ]
 
     @staticmethod

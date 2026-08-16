@@ -13,6 +13,7 @@ from app.api_schema.jobs import (
     JobRecord,
     JobResponse,
     JobStatus,
+    UpscaleModelType,
     WebhookPayload,
     utc_now,
 )
@@ -30,6 +31,7 @@ class Upscaler(Protocol):
         output_path: Path,
         tile: int,
         crop: tuple[int, int, int, int] | None = None,
+        model_type: UpscaleModelType = UpscaleModelType.ESRGAN,
     ) -> UpscaleResult: ...
 
 
@@ -71,6 +73,7 @@ class UpscalingJobService:
         callback_url: str | None,
         tile: int,
         crop: CropBox | None,
+        model_type: UpscaleModelType,
     ) -> JobAccepted:
         job_id = uuid4()
         record = JobRecord(
@@ -80,6 +83,7 @@ class UpscalingJobService:
             result_path=self.settings.result_dir / f"{job_id}.png",
             tile=tile,
             crop=crop,
+            model_type=model_type,
         )
         self.jobs[job_id] = record
         await self.queue.put(job_id)
@@ -121,6 +125,7 @@ class UpscalingJobService:
                 record.result_path,
                 record.tile,
                 record.crop.as_tuple() if record.crop else None,
+                record.model_type,
             )
             record.duration_seconds = round(perf_counter() - started, 3)
             record.input_width = result.input_width
@@ -155,6 +160,7 @@ class UpscalingJobService:
             duration_seconds=record.duration_seconds,
             completed_at=record.completed_at or utc_now(),
             error=record.error,
+            model_type=record.model_type,
         )
         callback_url = str(record.callback_url)
 

@@ -17,6 +17,11 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
+class UpscaleModelType(StrEnum):
+    ESRGAN = "esrgan"
+    HAT = "hat"
+
+
 class CropBox(BaseModel):
     left: int = Field(ge=0)
     top: int = Field(ge=0)
@@ -35,6 +40,7 @@ class JobRecord(BaseModel):
     result_path: Path
     tile: int
     crop: CropBox | None = None
+    model_type: UpscaleModelType = UpscaleModelType.ESRGAN
     created_at: datetime = Field(default_factory=utc_now)
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -69,6 +75,7 @@ class JobResponse(BaseModel):
     output_height: int | None = None
     duration_seconds: float | None = None
     error: str | None = None
+    model_type: UpscaleModelType = UpscaleModelType.ESRGAN
     callback_delivered: bool
     callback_error: str | None = None
 
@@ -84,6 +91,7 @@ class WebhookPayload(BaseModel):
     duration_seconds: float | None = None
     completed_at: datetime
     error: str | None = None
+    model_type: UpscaleModelType = UpscaleModelType.ESRGAN
 
 
 class ErrorResponse(BaseModel):

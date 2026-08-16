@@ -34,8 +34,7 @@ def create_app(
         if active_upscaler is None:
             active_upscaler = await asyncio.to_thread(
                 ImageUpscaler,
-                app_settings.model_path,
-                app_settings.model_blocks,
+                app_settings.weights_dir,
             )
         job_service = UpscalingJobService(
             settings=app_settings,
@@ -50,7 +49,7 @@ def create_app(
     application = FastAPI(
         title=app_settings.app_name,
         description=(
-            "Submit images for 4x Real-ESRGAN upscaling and receive the result "
+            "Submit images for Real-ESRGAN or HAT upscaling and receive the result "
             "URL through an n8n webhook."
         ),
         version="1.0.0",

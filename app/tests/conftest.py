@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from app.api_schema.jobs import UpscaleModelType
 from app.config import Settings
 from app.main import create_app
 from app.services.upscaler import UpscaleResult
@@ -21,6 +22,7 @@ class FakeUpscaler:
         output_path: Path,
         tile: int,
         crop: tuple[int, int, int, int] | None = None,
+        model_type: UpscaleModelType = UpscaleModelType.ESRGAN,
     ) -> UpscaleResult:
         with Image.open(input_path) as source:
             image = source.convert("RGB")
@@ -44,6 +46,7 @@ class FailingUpscaler:
         output_path: Path,
         tile: int,
         crop: tuple[int, int, int, int] | None = None,
+        model_type: UpscaleModelType = UpscaleModelType.ESRGAN,
     ) -> UpscaleResult:
         raise RuntimeError("Test inference failure")
 
@@ -77,7 +80,7 @@ def api_client(
 def make_settings(tmp_path: Path, **overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "public_base_url": "https://upscale.example.com",
-        "model_path": tmp_path / "unused.pth",
+        "weights_dir": tmp_path / "weights",
         "upload_dir": tmp_path / "uploads",
         "result_dir": tmp_path / "results",
         "callback_attempts": 1,

@@ -11,12 +11,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 class Settings(BaseSettings):
     app_name: str = "Image Upscaling API"
     public_base_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8000")
-    model_path: Path = PROJECT_ROOT / "weights" / "RealESRGAN_x4plus.pth"
+    weights_dir: Path = PROJECT_ROOT / "weights"
     upload_dir: Path = PROJECT_ROOT / "data" / "uploads"
     result_dir: Path = PROJECT_ROOT / "data" / "results"
     max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     default_tile: int = Field(default=400, ge=0)
-    model_blocks: int = Field(default=23, gt=0)
     image_download_timeout_seconds: float = Field(default=30.0, gt=0)
     callback_timeout_seconds: float = Field(default=30.0, gt=0)
     callback_attempts: int = Field(default=3, ge=1, le=10)

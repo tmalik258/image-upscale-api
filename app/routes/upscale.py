@@ -12,6 +12,7 @@ from app.api_schema.jobs import (
     JobAccepted,
     JobResponse,
     JobStatus,
+    UpscaleModelType,
 )
 from app.services.job_service import UpscalingJobService
 from app.utils.crops import build_crop
@@ -53,6 +54,7 @@ async def create_upscaling_job(
     crop_top: Annotated[int | None, Form(ge=0)] = None,
     crop_right: Annotated[int | None, Form(gt=0)] = None,
     crop_bottom: Annotated[int | None, Form(gt=0)] = None,
+    model_type: Annotated[UpscaleModelType, Form()] = UpscaleModelType.ESRGAN,
 ) -> JobAccepted:
     service = get_job_service(request)
     settings = service.settings
@@ -98,6 +100,7 @@ async def create_upscaling_job(
         callback_url=str(callback_url) if callback_url is not None else None,
         tile=settings.default_tile if tile is None else tile,
         crop=crop,
+        model_type=model_type,
     )
 
 

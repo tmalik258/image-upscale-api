@@ -44,6 +44,7 @@ def test_job_returns_upscaled_png_and_webhook_metadata(
     job = wait_for_callback(client, accepted["job_id"])
     assert job["status"] == "completed"
     assert job["callback_delivered"] is True
+    assert job["model_type"] == "esrgan"
     assert job["input_width"] == 8
     assert job["output_width"] == 32
     assert job["result_url"].endswith(f"{accepted['job_id']}.png")
@@ -53,6 +54,27 @@ def test_job_returns_upscaled_png_and_webhook_metadata(
     assert result.headers["content-type"] == "image/png"
     assert callbacks[0]["job_id"] == accepted["job_id"]
     assert callbacks[0]["result_url"] == job["result_url"]
+    assert callbacks[0]["model_type"] == "esrgan"
+
+
+def test_job_echoes_hat_model_type(
+    api_client: tuple[TestClient, list[dict[str, Any]]],
+    image_bytes: bytes,
+) -> None:
+    client, callbacks = api_client
+    response = client.post(
+        "/api/v1/upscale/jobs",
+        files={"image": ("source.png", image_bytes, "image/png")},
+        data={
+            "callback_url": "https://n8n.example.com/webhook/upscaled",
+            "model_type": "hat",
+        },
+    )
+
+    assert response.status_code == 202
+    job = wait_for_callback(client, response.json()["job_id"])
+    assert job["model_type"] == "hat"
+    assert callbacks[0]["model_type"] == "hat"
 
 
 def test_invalid_and_oversized_uploads_are_rejected(
