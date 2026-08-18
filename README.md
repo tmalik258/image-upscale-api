@@ -109,6 +109,37 @@ When processing completes, the API sends JSON to `callback_url`:
 Failed jobs use `status: "failed"`, omit `result_url`, and include `error`.
 Callbacks are retried according to `CALLBACK_ATTEMPTS`.
 
+## Rewrite image DPI
+
+`POST /api/v1/dpi` downloads an image from a URL, writes the requested DPI
+metadata, and returns a result URL. Pixel width and height are unchanged. This
+does not replace the DPI step after upscaling.
+
+```bash
+curl -X POST http://localhost:8000/api/v1/dpi \
+  -H "Content-Type: application/json" \
+  -d '{"image_url":"https://images.example.com/source.png","dpi":300,"format":"jpg"}'
+```
+
+`dpi` is optional and defaults to `144`. `format` is optional and defaults to
+`jpg`. Allowed formats are `jpg` and `png`. JPEG saves use quality 100.
+
+The response is `200 OK`:
+
+```json
+{
+  "result_url": "https://api.example.com/api/v1/dpi/results/6679a328-e851-4cde-871d-29ca3711d7fb.jpg",
+  "dpi": 300,
+  "format": "jpg",
+  "width": 512,
+  "height": 512
+}
+```
+
+`GET /api/v1/dpi/results/{image_id}.jpg` or `.png` downloads the rewritten file.
+The remote URL uses the same download rules as upscaling jobs. Result files remain
+in `data/results`.
+
 ## Job lifecycle
 
 - `GET /api/v1/upscale/jobs/{job_id}` returns status and metadata.

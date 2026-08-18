@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.config import Settings, get_settings
+from app.routes.dpi import router as dpi_router
 from app.routes.upscale import router as upscale_router
 from app.services.job_service import Upscaler, UpscalingJobService
 from app.services.upscaler import ImageUpscaler
@@ -41,6 +42,7 @@ def create_app(
             upscaler=active_upscaler,
             callback_client=callback_client,
         )
+        application.state.settings = app_settings
         application.state.job_service = job_service
         job_service.start()
         yield
@@ -56,6 +58,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.include_router(upscale_router, prefix="/api/v1")
+    application.include_router(dpi_router, prefix="/api/v1")
     application.add_exception_handler(HTTPException, _http_error)
     application.add_exception_handler(RequestValidationError, _validation_error)
 

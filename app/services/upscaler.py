@@ -8,10 +8,10 @@ from spandrel import ImageModelDescriptor
 
 from app.api_schema.jobs import UpscaleModelType
 from app.models.loader import WEIGHT_FILES, load_image_model
+from app.utils.dpi import DpiOutputFormat, save_image_with_dpi
 
 
 Image.MAX_IMAGE_PIXELS = None
-OUTPUT_DPI = 144
 
 
 @dataclass(frozen=True)
@@ -48,8 +48,7 @@ class ImageUpscaler:
 
         input_width, input_height = image.size
         output = self._upscale(model, image, tile)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output.save(output_path, format="PNG", dpi=(OUTPUT_DPI, OUTPUT_DPI))
+        save_image_with_dpi(output, output_path, output_format=DpiOutputFormat.PNG)
         output_width, output_height = output.size
         return UpscaleResult(
             input_width=input_width,
