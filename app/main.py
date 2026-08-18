@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -26,12 +27,16 @@ def create_app(
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         app_settings.prepare_directories()
         configure_logging(app_settings.log_dir)
+        startup_logger = logging.getLogger("app.startup")
+        startup_logger.info("Startup: directories and logging ready")
         active_upscaler = upscaler
         if active_upscaler is None:
+            startup_logger.info("Startup: initializing upscaler (CUDA probe deferred)")
             active_upscaler = await asyncio.to_thread(
                 ImageUpscaler,
                 app_settings.weights_dir,
             )
+            startup_logger.info("Startup: upscaler ready")
         job_service = UpscalingJobService(
             settings=app_settings,
             upscaler=active_upscaler,
@@ -40,6 +45,7 @@ def create_app(
         application.state.settings = app_settings
         application.state.job_service = job_service
         job_service.start()
+        startup_logger.info("Startup: job worker started")
         yield
         await job_service.stop()
 

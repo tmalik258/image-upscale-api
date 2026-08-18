@@ -44,8 +44,7 @@ uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Interactive API documentation is available at `http://localhost:8000/docs`.
 
-Logs are written under `data/logs/` (each file rotates at 10 MB). The terminal
-stays quiet.
+Logs are written under `data/logs/` (each file rotates at 10 MB).
 
 - Combined: `data/logs/api.log`
 - Per module: `upscaler.log`, `job_service.log`, `access.log`, `httpx.log`, …

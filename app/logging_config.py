@@ -50,14 +50,16 @@ class CombinedAndModuleFileHandler(logging.Handler):
 
 def configure_logging(log_dir: Path) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
-    handler = CombinedAndModuleFileHandler(
-        log_dir,
-        logging.Formatter(LOG_FORMAT),
-    )
+    formatter = logging.Formatter(LOG_FORMAT)
+    file_handler = CombinedAndModuleFileHandler(log_dir, formatter)
+    terminal_handler = logging.StreamHandler()
+    terminal_handler.setFormatter(formatter)
+    terminal_handler.setLevel(logging.INFO)
 
     for name in LOG_NAMES:
         log = logging.getLogger(name)
         log.handlers.clear()
-        log.addHandler(handler)
+        log.addHandler(file_handler)
+        log.addHandler(terminal_handler)
         log.setLevel(logging.INFO)
         log.propagate = False
