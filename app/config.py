@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     weights_dir: Path = PROJECT_ROOT / "weights"
     upload_dir: Path = PROJECT_ROOT / "data" / "uploads"
     result_dir: Path = PROJECT_ROOT / "data" / "results"
+    log_dir: Path = PROJECT_ROOT / "data" / "logs"
     max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     default_tile: int = Field(default=400, ge=0)
     image_download_timeout_seconds: float = Field(default=30.0, gt=0)
@@ -29,6 +30,7 @@ class Settings(BaseSettings):
     def prepare_directories(self) -> None:
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         self.result_dir.mkdir(parents=True, exist_ok=True)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
 
     def absolute_url(self, path: str) -> str:
         return f"{str(self.public_base_url).rstrip('/')}/{path.lstrip('/')}"

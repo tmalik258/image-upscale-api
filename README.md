@@ -44,6 +44,24 @@ uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Interactive API documentation is available at `http://localhost:8000/docs`.
 
+Logs are written under `data/logs/` (each file rotates at 10 MB). The terminal
+stays quiet.
+
+- Combined: `data/logs/api.log`
+- Per module: `upscaler.log`, `job_service.log`, `access.log`, `httpx.log`, …
+
+Tail the combined file during a run:
+
+```powershell
+Get-Content data/logs/api.log -Wait -Tail 20
+```
+
+Or watch one module:
+
+```powershell
+Get-Content data/logs/upscaler.log -Wait -Tail 20
+```
+
 ## Submit an upscaling job
 
 Send a multipart request from the n8n HTTP Request node. Provide exactly one
@@ -108,6 +126,10 @@ When processing completes, the API sends JSON to `callback_url`:
 
 Failed jobs use `status: "failed"`, omit `result_url`, and include `error`.
 Callbacks are retried according to `CALLBACK_ATTEMPTS`.
+
+Tiled upscaling keeps the full output image in RAM while the GPU runs one tile
+at a time. If a tile still runs out of VRAM, the job fails with that error
+instead of staying in `processing`.
 
 ## Rewrite image DPI
 

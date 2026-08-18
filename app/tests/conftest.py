@@ -4,6 +4,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+from uuid import UUID
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -23,6 +25,7 @@ class FakeUpscaler:
         tile: int,
         crop: tuple[int, int, int, int] | None = None,
         model_type: UpscaleModelType = UpscaleModelType.ESRGAN,
+        job_id: UUID | None = None,
     ) -> UpscaleResult:
         with Image.open(input_path) as source:
             image = source.convert("RGB")
@@ -47,8 +50,25 @@ class FailingUpscaler:
         tile: int,
         crop: tuple[int, int, int, int] | None = None,
         model_type: UpscaleModelType = UpscaleModelType.ESRGAN,
+        job_id: UUID | None = None,
     ) -> UpscaleResult:
         raise RuntimeError("Test inference failure")
+
+
+class GpuOomUpscaler:
+    def process(
+        self,
+        input_path: Path,
+        output_path: Path,
+        tile: int,
+        crop: tuple[int, int, int, int] | None = None,
+        model_type: UpscaleModelType = UpscaleModelType.ESRGAN,
+        job_id: UUID | None = None,
+    ) -> UpscaleResult:
+        raise RuntimeError(
+            f"GPU out of memory for {model_type.value} 2048x2048 tile={tile}: "
+            "CUDA out of memory. Tried to allocate 2.00 GiB"
+        )
 
 
 @pytest.fixture
@@ -83,6 +103,7 @@ def make_settings(tmp_path: Path, **overrides: Any) -> Settings:
         "weights_dir": tmp_path / "weights",
         "upload_dir": tmp_path / "uploads",
         "result_dir": tmp_path / "results",
+        "log_dir": tmp_path / "logs",
         "callback_attempts": 1,
         "max_upload_bytes": 1024 * 1024,
     }

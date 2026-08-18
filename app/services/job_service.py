@@ -32,6 +32,7 @@ class Upscaler(Protocol):
         tile: int,
         crop: tuple[int, int, int, int] | None = None,
         model_type: UpscaleModelType = UpscaleModelType.ESRGAN,
+        job_id: UUID | None = None,
     ) -> UpscaleResult: ...
 
 
@@ -87,6 +88,15 @@ class UpscalingJobService:
         )
         self.jobs[job_id] = record
         await self.queue.put(job_id)
+        crop_label = "no" if crop is None else f"{crop.left},{crop.top},{crop.right},{crop.bottom}"
+        logger.info(
+            "Job %s queued model=%s tile=%s crop=%s queue_size=%s",
+            job_id,
+            model_type.value,
+            tile,
+            crop_label,
+            self.queue.qsize(),
+        )
         return JobAccepted(
             job_id=job_id,
             status=record.status,
@@ -118,6 +128,12 @@ class UpscalingJobService:
         record.status = JobStatus.PROCESSING
         record.started_at = utc_now()
         started = perf_counter()
+        logger.info(
+            "Job %s processing started model=%s tile=%s",
+            record.job_id,
+            record.model_type.value,
+            record.tile,
+        )
         try:
             result = await asyncio.to_thread(
                 self.upscaler.process,
@@ -126,6 +142,7 @@ class UpscalingJobService:
                 record.tile,
                 record.crop.as_tuple() if record.crop else None,
                 record.model_type,
+                record.job_id,
             )
             record.duration_seconds = round(perf_counter() - started, 3)
             record.input_width = result.input_width
@@ -134,10 +151,25 @@ class UpscalingJobService:
             record.output_height = result.output_height
             record.result_url = self._result_url(record.job_id)
             record.status = JobStatus.COMPLETED
+            logger.info(
+                "Job %s completed %sx%s -> %sx%s in %.1fs",
+                record.job_id,
+                result.input_width,
+                result.input_height,
+                result.output_width,
+                result.output_height,
+                record.duration_seconds,
+            )
         except Exception as error:
             record.duration_seconds = round(perf_counter() - started, 3)
             record.status = JobStatus.FAILED
             record.error = str(error)
+            logger.info(
+                "Job %s failed after %.1fs: %s",
+                record.job_id,
+                record.duration_seconds,
+                error,
+            )
             logger.exception("Upscaling failed for job %s", record.job_id)
         finally:
             record.completed_at = utc_now()
@@ -173,6 +205,7 @@ class UpscalingJobService:
                 response.raise_for_status()
                 record.callback_delivered = True
                 record.callback_error = None
+                logger.info("Job %s webhook delivered", record.job_id)
                 return
             except httpx.HTTPError as error:
                 record.callback_error = str(error)

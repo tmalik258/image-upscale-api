@@ -223,6 +223,7 @@ __marimo__/
 docs/
 data/uploads/
 data/results/
+data/logs/
 
 # Model weights
 weights/*.pth

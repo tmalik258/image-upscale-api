@@ -7,7 +7,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.tests.conftest import FailingUpscaler, FakeUpscaler, make_settings
+from app.tests.conftest import FailingUpscaler, FakeUpscaler, GpuOomUpscaler, make_settings
 
 
 def wait_for_callback(
@@ -134,6 +134,43 @@ def test_failed_inference_is_reported_to_webhook(
     assert job["result_url"] is None
     assert callbacks[0]["status"] == "failed"
     assert callbacks[0]["error"] == "Test inference failure"
+
+
+def test_gpu_oom_is_reported_as_failed_job(
+    tmp_path: Path,
+    image_bytes: bytes,
+) -> None:
+    callbacks: list[dict[str, Any]] = []
+
+    def callback_handler(request: httpx.Request) -> httpx.Response:
+        callbacks.append(json.loads(request.content))
+        return httpx.Response(200)
+
+    callback_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(callback_handler)
+    )
+    application = create_app(
+        make_settings(tmp_path),
+        GpuOomUpscaler(),
+        callback_client,
+    )
+    with TestClient(application) as client:
+        response = client.post(
+            "/api/v1/upscale/jobs",
+            files={"image": ("source.png", image_bytes, "image/png")},
+            data={
+                "callback_url": "https://n8n.example.com/webhook/upscaled",
+                "model_type": "hat",
+                "tile": "400",
+            },
+        )
+        job = wait_for_callback(client, response.json()["job_id"])
+
+    assert job["status"] == "failed"
+    assert "GPU out of memory" in job["error"]
+    assert job["result_url"] is None
+    assert callbacks[0]["status"] == "failed"
+    assert "GPU out of memory" in callbacks[0]["error"]
 
 
 def test_webhook_failure_is_exposed_in_job_metadata(

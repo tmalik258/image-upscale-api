@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -9,16 +8,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.config import Settings, get_settings
+from app.logging_config import configure_logging
 from app.routes.dpi import router as dpi_router
 from app.routes.upscale import router as upscale_router
 from app.services.job_service import Upscaler, UpscalingJobService
 from app.services.upscaler import ImageUpscaler
-
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
 
 
 def create_app(
@@ -31,6 +25,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         app_settings.prepare_directories()
+        configure_logging(app_settings.log_dir)
         active_upscaler = upscaler
         if active_upscaler is None:
             active_upscaler = await asyncio.to_thread(

@@ -22,9 +22,12 @@ from app.models.loader import WEIGHT_FILES, load_image_model
 Image.MAX_IMAGE_PIXELS = None
 
 
-def infer(model, tensor):
+def infer(model, tensor, device):
     with torch.inference_mode():
-        return model(tensor)
+        output = model(tensor)
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+    return output
 
 
 def upscale(model, img, device, tile=0, pad=10):
@@ -34,9 +37,12 @@ def upscale(model, img, device, tile=0, pad=10):
     _, _, height, width = tensor.shape
 
     if tile <= 0:
-        output = infer(model, tensor)
+        output = infer(model, tensor, device)
     else:
-        output = torch.zeros(1, 3, height * scale, width * scale, device=device)
+        canvas_device = "cpu" if device.type == "cuda" else device
+        output = torch.zeros(
+            1, 3, height * scale, width * scale, device=canvas_device
+        )
         columns, rows = -(-width // tile), -(-height // tile)
         for row in range(rows):
             for column in range(columns):
@@ -44,7 +50,9 @@ def upscale(model, img, device, tile=0, pad=10):
                 x1, y1 = min(x0 + tile, width), min(y0 + tile, height)
                 px0, py0 = max(x0 - pad, 0), max(y0 - pad, 0)
                 px1, py1 = min(x1 + pad, width), min(y1 + pad, height)
-                patch = infer(model, tensor[:, :, py0:py1, px0:px1])
+                patch = infer(model, tensor[:, :, py0:py1, px0:px1], device)
+                if canvas_device == "cpu":
+                    patch = patch.cpu()
                 ox, oy = (x0 - px0) * scale, (y0 - py0) * scale
                 output[:, :, y0 * scale : y1 * scale, x0 * scale : x1 * scale] = patch[
                     :, :, oy : oy + (y1 - y0) * scale, ox : ox + (x1 - x0) * scale
